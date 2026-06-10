@@ -21,10 +21,25 @@ const C = {
   glowGold: "0 0 0 1px rgba(250,204,21,0.35), 0 10px 30px -10px rgba(250,204,21,0.55)",
 };
 
+const TZ = "America/Sao_Paulo";
+
+const FIFA_ISO2 = {
+  MEX:"mx",RSA:"za",KOR:"kr",CZE:"cz",CAN:"ca",BIH:"ba",QAT:"qa",SUI:"ch",
+  BRA:"br",MAR:"ma",HAI:"ht",SCO:"gb-sct",USA:"us",PAR:"py",AUS:"au",TUR:"tr",
+  GER:"de",CUW:"cw",CIV:"ci",ECU:"ec",NED:"nl",JAP:"jp",SWE:"se",TUN:"tn",
+  BEL:"be",EGY:"eg",IRN:"ir",NZL:"nz",ESP:"es",CPV:"cv",SAU:"sa",URU:"uy",
+  FRA:"fr",SEN:"sn",IRQ:"iq",NOR:"no",ARG:"ar",ALG:"dz",AUT:"at",JOR:"jo",
+  POR:"pt",COD:"cd",UZB:"uz",COL:"co",ENG:"gb-eng",CRO:"hr",GHA:"gh",PAN:"pa",
+};
+function FlagImg({ id, size = 22 }) {
+  const iso = FIFA_ISO2[id];
+  if (!iso) return null;
+  return <img src={`https://flagcdn.com/w40/${iso}.png`} alt={id} style={{ width: size, height: "auto", display: "inline-block", borderRadius: 2, verticalAlign: "middle" }} />;
+}
 function formatDate(dateStr) {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) +
-    " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: TZ }) +
+    " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
 export default function App() {
@@ -154,8 +169,10 @@ function AuthArea() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setError(error.message); else setShowModal(false);
       } else {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
-        if (error) setError(error.message); else setError("Verifique seu email para confirmar o cadastro!");
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+        if (error) setError(error.message);
+        else if (data.session) setShowModal(false);
+        else setError("Cadastro realizado! Verifique seu email para confirmar.");
       }
     } finally { setLoading(false); }
   }
@@ -296,7 +313,7 @@ function ParticipatingCountries({ groups, teams }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {gTeams.map(t => (
                   <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: `1px solid ${C.borderSoft}` }}>
-                    <span style={{ fontSize: 20, lineHeight: 1 }}>{t.flag}</span>
+                    <FlagImg id={t.id} size={24} />
                     <span style={{ fontSize: 13, color: C.textSoft }}>{t.name}</span>
                   </div>
                 ))}
@@ -325,13 +342,13 @@ function MatchRow({ match, teams, showScore }) {
   const finished = showScore && match.status === "finished";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderBottom: `1px solid ${C.borderSoft}`, fontSize: 14 }}>
-      <span style={{ width: 22, fontSize: 18 }}>{home.flag}</span>
+      <FlagImg id={home.id} size={22} />
       <span style={{ flex: 1, textAlign: "right", fontSize: 13, color: C.text }}>{home.name}</span>
       <span style={{ padding: "5px 12px", background: finished ? `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})` : "rgba(255,255,255,0.05)", borderRadius: 8, fontFamily: C.display, minWidth: 64, textAlign: "center", color: finished ? C.bgDeep : C.textSoft, fontSize: 12, border: finished ? "none" : `1px solid ${C.borderSoft}` }}>
         {finished ? `${match.home_score} - ${match.away_score}` : formatDate(match.match_date)}
       </span>
       <span style={{ flex: 1, fontSize: 13, color: C.text }}>{away.name}</span>
-      <span style={{ width: 22, fontSize: 18 }}>{away.flag}</span>
+      <FlagImg id={away.id} size={22} />
     </div>
   );
 }
@@ -353,7 +370,7 @@ function GroupsTab() {
               </div>
               {groupTeams.map(t => (
                 <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", fontSize: 14 }}>
-                  <span style={{ fontSize: 18 }}>{t.flag}</span>
+                  <FlagImg id={t.id} size={22} />
                   <span style={{ color: C.text }}>{t.name}</span>
                 </div>
               ))}
@@ -362,9 +379,9 @@ function GroupsTab() {
                   const h = teams[m.home_team_id]; const a = teams[m.away_team_id];
                   return (
                     <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, fontSize: 12, padding: "5px 0", color: C.textSoft }}>
-                      <span>{h?.flag} {h?.name}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}><FlagImg id={h?.id} size={16} /> {h?.name}</span>
                       <span style={{ background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 6, fontFamily: C.display, color: C.text, fontSize: 11 }}>{m.status === "finished" ? `${m.home_score}×${m.away_score}` : formatDate(m.match_date)}</span>
-                      <span>{a?.name} {a?.flag}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>{a?.name} <FlagImg id={a?.id} size={16} /></span>
                     </div>
                   );
                 })}
@@ -378,7 +395,7 @@ function GroupsTab() {
 }
 
 function PredictionsTab() {
-  const { user, matches, teams, groups, predictions, groupPredictions, competitionStarted, supabase, loadUserPredictions } = useApp();
+  const { user, matches, teams, groups, predictions, groupPredictions, supabase, loadUserPredictions } = useApp();
   const [activeGroup, setActiveGroup] = useState(null);
   const [saving, setSaving] = useState({});
   const [localPreds, setLocalPreds] = useState({});
@@ -386,10 +403,18 @@ function PredictionsTab() {
 
   useEffect(() => { setLocalPreds({ ...predictions }); setLocalGP({ ...groupPredictions }); }, [predictions, groupPredictions]);
 
+  const now = new Date();
+  const matchLocked = (m) => m.status !== "upcoming" || now >= new Date(m.match_date);
+  const groupLocked = (groupId) => {
+    const gMs = matches.filter(m => m.group_id === groupId && m.stage === "group").sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
+    return gMs.length > 0 && matchLocked(gMs[0]);
+  };
+
   if (!user) return <EmptyState icon="🔒" title="Acesso Restrito" desc='Faça login no botão "Entrar" no topo para palpitar.' />;
-  if (competitionStarted) return <EmptyState icon="🔒" title="Palpites Encerrados" desc="A competição começou. Seus palpites foram congelados." />;
 
   async function savePrediction(matchId, home, away) {
+    const match = matches.find(m => m.id === matchId);
+    if (!match || matchLocked(match)) return;
     setSaving(s => ({ ...s, [matchId]: true }));
     const existing = predictions[matchId];
     if (existing) await supabase.from("predictions").update({ home_score: parseInt(home), away_score: parseInt(away), updated_at: new Date().toISOString() }).eq("id", existing.id);
@@ -399,7 +424,7 @@ function PredictionsTab() {
   }
 
   async function saveGroupPred(groupId, first, second) {
-    if (!first || !second || first === second) return;
+    if (!first || !second || first === second || groupLocked(groupId)) return;
     const existing = groupPredictions[groupId];
     if (existing) await supabase.from("group_predictions").update({ first_place: first, second_place: second, updated_at: new Date().toISOString() }).eq("id", existing.id);
     else await supabase.from("group_predictions").insert({ user_id: user.id, group_id: groupId, first_place: first, second_place: second });
@@ -416,7 +441,7 @@ function PredictionsTab() {
     <div>
       <SectionTitle eyebrow="Seus" title="Palpites" />
       <div style={{ background: "rgba(250,204,21,0.08)", border: `1px solid rgba(250,204,21,0.3)`, borderRadius: 12, padding: "14px 18px", marginBottom: 20, fontSize: 13, color: C.gold, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 16 }}>⚠️</span> Palpites podem ser editados até o início do primeiro jogo (11/06/2026).
+        <span style={{ fontSize: 16 }}>⚠️</span> Cada palpite se encerra individualmente no horário de início do jogo (horário de Brasília).
       </div>
       {groups.map(g => {
         const gMatches = matchesByGroup[g.id] || [];
@@ -436,13 +461,15 @@ function PredictionsTab() {
             </div>
             {isOpen && (
               <div style={{ padding: "0 22px 22px" }}>
-                <div style={{ background: "rgba(34,197,94,0.06)", border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 18 }}>
-                  <div style={{ fontFamily: C.display, marginBottom: 14, fontSize: 12, color: C.neon, letterSpacing: "0.15em", textTransform: "uppercase" }}>🏅 Classificação do Grupo</div>
+                <div style={{ background: "rgba(34,197,94,0.06)", border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 18, opacity: groupLocked(g.id) ? 0.55 : 1 }}>
+                  <div style={{ fontFamily: C.display, marginBottom: 14, fontSize: 12, color: C.neon, letterSpacing: "0.15em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                    🏅 Classificação do Grupo {groupLocked(g.id) && <span style={{ fontSize: 14 }}>🔒</span>}
+                  </div>
                   <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
                     {["first_place", "second_place"].map((pos, i) => (
                       <div key={pos}>
                         <label style={{ fontSize: 11, color: C.textSoft, display: "block", marginBottom: 6, letterSpacing: "0.1em", textTransform: "uppercase" }}>{i === 0 ? "🥇 1º Lugar" : "🥈 2º Lugar"}</label>
-                        <select value={localGP[g.id]?.[pos] || ""} onChange={e => { const updated = { ...localGP[g.id], [pos]: e.target.value }; setLocalGP(prev => ({ ...prev, [g.id]: updated })); saveGroupPred(g.id, pos === "first_place" ? e.target.value : localGP[g.id]?.first_place, pos === "second_place" ? e.target.value : localGP[g.id]?.second_place); }} style={{ ...inputStyle, marginBottom: 0, padding: "10px" }}>
+                        <select disabled={groupLocked(g.id)} value={localGP[g.id]?.[pos] || ""} onChange={e => { const updated = { ...localGP[g.id], [pos]: e.target.value }; setLocalGP(prev => ({ ...prev, [g.id]: updated })); saveGroupPred(g.id, pos === "first_place" ? e.target.value : localGP[g.id]?.first_place, pos === "second_place" ? e.target.value : localGP[g.id]?.second_place); }} style={{ ...inputStyle, marginBottom: 0, padding: "10px", cursor: groupLocked(g.id) ? "not-allowed" : "default" }}>
                           <option value="">Selecione</option>
                           {gTeams.map(t => <option key={t.id} value={t.id}>{t.flag} {t.name}</option>)}
                         </select>
@@ -454,22 +481,33 @@ function PredictionsTab() {
                   const home = teams[m.home_team_id]; const away = teams[m.away_team_id];
                   const pred = localPreds[m.id] || { home_score: "", away_score: "" };
                   const saved = !!predictions[m.id];
+                  const locked = matchLocked(m);
                   return (
-                    <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0", borderBottom: `1px solid ${C.borderSoft}` }}>
-                      <div style={{ flex: 1, textAlign: "right", fontSize: 13 }}>
-                        <span style={{ fontSize: 17, marginRight: 6 }}>{home?.flag}</span><span>{home?.name}</span>
+                    <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0", borderBottom: `1px solid ${C.borderSoft}`, opacity: locked ? 0.55 : 1 }}>
+                      <div style={{ flex: 1, textAlign: "right", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                        <span>{home?.name}</span><FlagImg id={home?.id} size={20} />
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <input type="number" min="0" max="99" value={pred.home_score ?? ""} onChange={e => setLocalPreds(prev => ({ ...prev, [m.id]: { ...prev[m.id], home_score: e.target.value } }))} style={scoreInputStyle} />
-                        <span style={{ color: C.neon, fontFamily: C.display, fontSize: 16 }}>×</span>
-                        <input type="number" min="0" max="99" value={pred.away_score ?? ""} onChange={e => setLocalPreds(prev => ({ ...prev, [m.id]: { ...prev[m.id], away_score: e.target.value } }))} style={scoreInputStyle} />
+                        {locked ? (
+                          <span style={{ color: C.textSoft, fontSize: 12, padding: "6px 10px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: `1px solid ${C.borderSoft}` }}>
+                            {saved ? `${pred.home_score ?? "?"} × ${pred.away_score ?? "?"}` : "🔒"}
+                          </span>
+                        ) : (
+                          <>
+                            <input type="number" min="0" max="99" value={pred.home_score ?? ""} onChange={e => setLocalPreds(prev => ({ ...prev, [m.id]: { ...prev[m.id], home_score: e.target.value } }))} style={scoreInputStyle} />
+                            <span style={{ color: C.neon, fontFamily: C.display, fontSize: 16 }}>×</span>
+                            <input type="number" min="0" max="99" value={pred.away_score ?? ""} onChange={e => setLocalPreds(prev => ({ ...prev, [m.id]: { ...prev[m.id], away_score: e.target.value } }))} style={scoreInputStyle} />
+                          </>
+                        )}
                       </div>
-                      <div style={{ flex: 1, fontSize: 13 }}>
-                        <span>{away?.name}</span><span style={{ fontSize: 17, marginLeft: 6 }}>{away?.flag}</span>
+                      <div style={{ flex: 1, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                        <FlagImg id={away?.id} size={20} /><span>{away?.name}</span>
                       </div>
-                      <button onClick={() => savePrediction(m.id, pred.home_score, pred.away_score)} disabled={saving[m.id] || pred.home_score === "" || pred.away_score === ""} style={{ background: saved ? "rgba(34,197,94,0.15)" : `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: saved ? C.neon : C.bgDeep, border: saved ? `1px solid ${C.border}` : "none", padding: "8px 14px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.1em", textTransform: "uppercase", minWidth: 76 }}>
-                        {saving[m.id] ? "..." : saved ? "✓ OK" : "Salvar"}
-                      </button>
+                      {!locked && (
+                        <button onClick={() => savePrediction(m.id, pred.home_score, pred.away_score)} disabled={saving[m.id] || pred.home_score === "" || pred.away_score === ""} style={{ background: saved ? "rgba(34,197,94,0.15)" : `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: saved ? C.neon : C.bgDeep, border: saved ? `1px solid ${C.border}` : "none", padding: "8px 14px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.1em", textTransform: "uppercase", minWidth: 76 }}>
+                          {saving[m.id] ? "..." : saved ? "✓ OK" : "Salvar"}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
