@@ -94,8 +94,7 @@ export default function App() {
     const gpMap = {}; (gpRes.data || []).forEach(gp => gpMap[gp.group_id] = gp); setGroupPredictions(gpMap);
   }
 
-  const competitionStarted = matches.length > 0 && matches[0].status !== "upcoming";
-  const ctx = { user, profile, matches, teams, groups, predictions, groupPredictions, scores, supabase, competitionStarted, loadPublicData, loadUserPredictions, setPredictions, setGroupPredictions };
+  const ctx = { user, profile, matches, teams, groups, predictions, groupPredictions, scores, supabase, loadPublicData, loadUserPredictions, setPredictions, setGroupPredictions };
   const tabs = [
     { id: "home", label: "Início", icon: "🏆" },
     { id: "groups", label: "Grupos", icon: "🌐" },
