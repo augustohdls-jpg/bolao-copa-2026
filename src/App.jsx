@@ -6,6 +6,8 @@ const SUPABASE_URL = "https://umfxyxkavcolyfyagbia.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtZnh5eGthdmNvbHlmeWFnYmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NTQ4MjcsImV4cCI6MjA5NjUzMDgyN30.C-SgPgn0XdnEs6s9_8r2wexKMkyojlSk0HnW1eJ7Ur4";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const ADMIN_EMAIL = "augustohdls@gmail.com";
+
 const AppContext = createContext(null);
 const useApp = () => useContext(AppContext);
 
@@ -95,12 +97,14 @@ export default function App() {
   }
 
   const ctx = { user, profile, matches, teams, groups, predictions, groupPredictions, scores, supabase, loadPublicData, loadUserPredictions, setPredictions, setGroupPredictions };
+  const isAdmin = user?.email === ADMIN_EMAIL;
   const tabs = [
     { id: "home", label: "Início", icon: "🏆" },
     { id: "groups", label: "Grupos", icon: "🌐" },
     { id: "predictions", label: "Palpites", icon: "⚡" },
     { id: "ranking", label: "Ranking", icon: "🥇" },
     { id: "rules", label: "Regulamento", icon: "📋" },
+    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : []),
   ];
 
   return (
@@ -143,6 +147,7 @@ export default function App() {
               {tab === "predictions" && <PredictionsTab />}
               {tab === "ranking" && <RankingTab />}
               {tab === "rules" && <RulesTab />}
+              {tab === "admin" && isAdmin && <AdminTab />}
             </>
           )}
         </main>
@@ -487,7 +492,12 @@ function PredictionsTab() {
                 {gMatches.map(m => {
                   const home = teams[m.home_team_id]; const away = teams[m.away_team_id];
                   const pred = localPreds[m.id] || { home_score: "", away_score: "" };
-                  const saved = !!predictions[m.id];
+                  const savedPred = predictions[m.id];
+                  // "sujo" = valor digitado difere do que está salvo no banco
+                  const isDirty = !savedPred
+                    || String(pred.home_score ?? "") !== String(savedPred.home_score ?? "")
+                    || String(pred.away_score ?? "") !== String(savedPred.away_score ?? "");
+                  const saved = !!savedPred && !isDirty;
                   const locked = matchLocked(m);
                   return (
                     <div key={m.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.borderSoft}`, opacity: locked ? 0.55 : 1 }}>
@@ -515,7 +525,7 @@ function PredictionsTab() {
                         <FlagImg id={away?.id} size={20} /><span>{away?.name}</span>
                       </div>
                       {!locked && (
-                        <button onClick={() => savePrediction(m.id, pred.home_score, pred.away_score)} disabled={saving[m.id] || pred.home_score === "" || pred.away_score === ""} style={{ background: saved ? "rgba(34,197,94,0.15)" : `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: saved ? C.neon : C.bgDeep, border: saved ? `1px solid ${C.border}` : "none", padding: "8px 14px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.1em", textTransform: "uppercase", minWidth: 76 }}>
+                        <button onClick={() => savePrediction(m.id, pred.home_score, pred.away_score)} disabled={saving[m.id] || pred.home_score === "" || pred.away_score === "" || !isDirty} style={{ background: saved ? "rgba(34,197,94,0.15)" : `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: saved ? C.neon : C.bgDeep, border: saved ? `1px solid ${C.border}` : "none", padding: "8px 14px", borderRadius: 8, fontSize: 11, cursor: isDirty ? "pointer" : "default", fontFamily: C.display, letterSpacing: "0.1em", textTransform: "uppercase", minWidth: 76, opacity: (pred.home_score === "" || pred.away_score === "") ? 0.5 : 1 }}>
                           {saving[m.id] ? "..." : saved ? "✓ OK" : "Salvar"}
                         </button>
                       )}
@@ -533,6 +543,95 @@ function PredictionsTab() {
 }
 
 const scoreInputStyle = { width: 48, background: C.bgDeep, border: `1px solid ${C.border}`, color: C.text, textAlign: "center", padding: "8px", borderRadius: 8, fontSize: 18, fontFamily: C.display, outline: "none" };
+
+function AdminTab() {
+  const { matches, teams, supabase, loadPublicData } = useApp();
+  const [local, setLocal] = useState({});
+  const [saving, setSaving] = useState({});
+  const [filter, setFilter] = useState("all");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const init = {};
+    matches.forEach(m => { init[m.id] = { h: m.home_score ?? "", a: m.away_score ?? "" }; });
+    setLocal(init);
+  }, [matches]);
+
+  async function saveResult(m) {
+    const v = local[m.id];
+    if (v?.h === "" || v?.a === "" || v?.h == null || v?.a == null) return;
+    setSaving(s => ({ ...s, [m.id]: true })); setMsg("");
+    const { error } = await supabase.rpc("set_result", { p_match_id: m.id, p_home: parseInt(v.h), p_away: parseInt(v.a) });
+    if (error) setMsg("Erro ao salvar: " + error.message);
+    else { setMsg(`✓ Resultado salvo: ${teams[m.home_team_id]?.name} ${v.h} x ${v.a} ${teams[m.away_team_id]?.name}`); await loadPublicData(); }
+    setSaving(s => ({ ...s, [m.id]: false }));
+  }
+
+  async function reopen(m) {
+    setSaving(s => ({ ...s, [m.id]: true })); setMsg("");
+    const { error } = await supabase.rpc("reopen_match", { p_match_id: m.id });
+    if (error) setMsg("Erro: " + error.message);
+    else { setMsg("↩️ Jogo reaberto (resultado removido)."); await loadPublicData(); }
+    setSaving(s => ({ ...s, [m.id]: false }));
+  }
+
+  const list = matches.filter(m =>
+    filter === "all" ? true : filter === "finished" ? m.status === "finished" : m.status !== "finished"
+  );
+  const finishedCount = matches.filter(m => m.status === "finished").length;
+
+  return (
+    <div>
+      <SectionTitle eyebrow="Painel" title="Admin · Resultados" />
+      <div style={{ background: "rgba(34,197,94,0.08)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 18px", marginBottom: 18, fontSize: 13, color: C.text }}>
+        Digite o placar final de cada jogo e clique em <strong>Lançar</strong>. A pontuação de todos é recalculada automaticamente. {finishedCount} de {matches.length} jogos finalizados.
+      </div>
+      {msg && <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: C.neon }}>{msg}</div>}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        {[["all","Todos"],["upcoming","A realizar"],["finished","Finalizados"]].map(([id,label]) => (
+          <button key={id} onClick={() => setFilter(id)} style={{ background: filter===id ? `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})` : "transparent", color: filter===id ? C.bgDeep : C.textSoft, border: `1px solid ${filter===id ? "transparent" : C.borderSoft}`, padding: "8px 16px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.05em", textTransform: "uppercase" }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ background: `linear-gradient(180deg, ${C.surface}, ${C.surface2})`, border: `1px solid ${C.border}`, borderRadius: 16, padding: "0.5rem 1.25rem" }}>
+        {list.map(m => {
+          const home = teams[m.home_team_id]; const away = teams[m.away_team_id];
+          const v = local[m.id] || { h: "", a: "" };
+          const isFinished = m.status === "finished";
+          return (
+            <div key={m.id} style={{ padding: "14px 0", borderBottom: `1px solid ${C.borderSoft}` }}>
+              <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <span>🗓️ {formatDate(m.match_date)}</span>
+                <span style={{ color: C.textSoft }}>· Grupo {m.group_id}</span>
+                {isFinished && <span style={{ color: C.neon, fontFamily: C.display, fontSize: 10, textTransform: "uppercase" }}>· Finalizado</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 120, textAlign: "right", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                  <span>{home?.name}</span><FlagImg id={home?.id} size={20} />
+                </div>
+                <input type="number" min="0" max="99" value={v.h} onChange={e => setLocal(p => ({ ...p, [m.id]: { ...p[m.id], h: e.target.value } }))} style={scoreInputStyle} />
+                <span style={{ color: C.neon, fontFamily: C.display }}>×</span>
+                <input type="number" min="0" max="99" value={v.a} onChange={e => setLocal(p => ({ ...p, [m.id]: { ...p[m.id], a: e.target.value } }))} style={scoreInputStyle} />
+                <div style={{ flex: 1, minWidth: 120, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                  <FlagImg id={away?.id} size={20} /><span>{away?.name}</span>
+                </div>
+                <button onClick={() => saveResult(m)} disabled={saving[m.id] || v.h === "" || v.a === ""} style={{ background: `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: C.bgDeep, border: "none", padding: "9px 16px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.08em", textTransform: "uppercase", minWidth: 80, opacity: (v.h === "" || v.a === "") ? 0.5 : 1 }}>
+                  {saving[m.id] ? "..." : isFinished ? "Atualizar" : "Lançar"}
+                </button>
+                {isFinished && (
+                  <button onClick={() => reopen(m)} disabled={saving[m.id]} style={{ background: "transparent", color: C.danger, border: `1px solid ${C.borderSoft}`, padding: "9px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    Reabrir
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function EmptyState({ icon, title, desc }) {
   return (
