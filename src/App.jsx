@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, useContext } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://umfxyxkavcolyfyagbia.supabase.co";
@@ -173,7 +174,7 @@ function AuthArea() {
     <>
       <button onClick={() => setShowModal(true)} style={{ background: `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: C.bgDeep, border: "none", cursor: "pointer", padding: "10px 22px", borderRadius: 10, fontFamily: C.display, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", boxShadow: C.glow }}>Entrar</button>
 
-      {showModal && (
+      {showModal && createPortal(
         <div
           onClick={() => setShowModal(false)}
           style={{
@@ -226,7 +227,7 @@ function AuthArea() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }
