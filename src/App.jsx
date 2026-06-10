@@ -271,6 +271,14 @@ function HomeTab() {
           </div>
         </div>
       </div>
+
+      <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, rgba(250,204,21,0.12), rgba(34,197,94,0.10))`, border: `1px solid rgba(250,204,21,0.4)`, borderRadius: 20, padding: "1.75rem 2rem", boxShadow: C.glowGold, textAlign: "center" }}>
+        <div style={{ fontSize: 11, color: C.gold, letterSpacing: "0.25em", textTransform: "uppercase", fontFamily: C.display, marginBottom: 10 }}>💰 Prêmio Acumulado</div>
+        <div style={{ fontFamily: C.display, fontSize: "clamp(2.2rem, 6vw, 3.5rem)", lineHeight: 1, background: `linear-gradient(135deg, ${C.gold}, ${C.neon})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+          R$ {(scores.length * 50).toLocaleString("pt-BR")}
+        </div>
+        <div style={{ fontSize: 12, color: C.textSoft, marginTop: 10 }}>{scores.length} participante{scores.length === 1 ? "" : "s"} × R$ 50,00</div>
+      </div>
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
         <Card title="Próximos Jogos" accent={C.neon} icon="📅">
           {upcoming.length === 0 ? <Empty>Nenhum jogo agendado</Empty> : upcoming.map(m => <MatchRow key={m.id} match={m} teams={teams} />)}
@@ -468,9 +476,9 @@ function PredictionsTab() {
                     {["first_place", "second_place"].map((pos, i) => (
                       <div key={pos}>
                         <label style={{ fontSize: 11, color: C.textSoft, display: "block", marginBottom: 6, letterSpacing: "0.1em", textTransform: "uppercase" }}>{i === 0 ? "🥇 1º Lugar" : "🥈 2º Lugar"}</label>
-                        <select disabled={groupLocked(g.id)} value={localGP[g.id]?.[pos] || ""} onChange={e => { const updated = { ...localGP[g.id], [pos]: e.target.value }; setLocalGP(prev => ({ ...prev, [g.id]: updated })); saveGroupPred(g.id, pos === "first_place" ? e.target.value : localGP[g.id]?.first_place, pos === "second_place" ? e.target.value : localGP[g.id]?.second_place); }} style={{ ...inputStyle, marginBottom: 0, padding: "10px", cursor: groupLocked(g.id) ? "not-allowed" : "default" }}>
-                          <option value="">Selecione</option>
-                          {gTeams.map(t => <option key={t.id} value={t.id}>{t.flag} {t.name}</option>)}
+                        <select disabled={groupLocked(g.id)} value={localGP[g.id]?.[pos] || ""} onChange={e => { const updated = { ...localGP[g.id], [pos]: e.target.value }; setLocalGP(prev => ({ ...prev, [g.id]: updated })); saveGroupPred(g.id, pos === "first_place" ? e.target.value : localGP[g.id]?.first_place, pos === "second_place" ? e.target.value : localGP[g.id]?.second_place); }} style={{ ...inputStyle, marginBottom: 0, padding: "10px", background: C.surface2, color: C.text, cursor: groupLocked(g.id) ? "not-allowed" : "default" }}>
+                          <option value="" style={{ background: C.surface2, color: C.textSoft }}>Selecione</option>
+                          {gTeams.map(t => <option key={t.id} value={t.id} style={{ background: C.surface2, color: C.text }}>{t.flag} {t.name}</option>)}
                         </select>
                       </div>
                     ))}
@@ -482,7 +490,11 @@ function PredictionsTab() {
                   const saved = !!predictions[m.id];
                   const locked = matchLocked(m);
                   return (
-                    <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0", borderBottom: `1px solid ${C.borderSoft}`, opacity: locked ? 0.55 : 1 }}>
+                    <div key={m.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.borderSoft}`, opacity: locked ? 0.55 : 1 }}>
+                    <div style={{ textAlign: "center", fontSize: 11, color: locked ? C.danger : C.textSoft, marginBottom: 8, letterSpacing: "0.05em", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                      <span>🗓️</span> {formatDate(m.match_date)} {locked && <span style={{ color: C.danger, fontFamily: C.display, fontSize: 10, textTransform: "uppercase" }}>· Encerrado</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ flex: 1, textAlign: "right", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
                         <span>{home?.name}</span><FlagImg id={home?.id} size={20} />
                       </div>
@@ -507,6 +519,7 @@ function PredictionsTab() {
                           {saving[m.id] ? "..." : saved ? "✓ OK" : "Salvar"}
                         </button>
                       )}
+                    </div>
                     </div>
                   );
                 })}
