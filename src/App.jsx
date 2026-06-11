@@ -698,9 +698,10 @@ function RulesTab() {
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
       <SectionTitle eyebrow="Como funciona" title="Regulamento" />
       <Section title="⏰ Prazo dos Palpites">
-        <p>Palpites podem ser enviados e editados livremente até o início do primeiro jogo.</p>
-        <p>Após o início da competição, todos os palpites são <strong style={{ color: C.danger }}>congelados</strong>.</p>
-        <p>Nenhum palpite poderá ser alterado, criado ou removido depois disso.</p>
+        <p>Cada palpite pode ser enviado e editado livremente até o <strong style={{ color: C.text }}>início daquele jogo</strong>.</p>
+        <p>No momento em que a partida começa, o palpite daquele jogo é <strong style={{ color: C.danger }}>congelado</strong> automaticamente e não pode mais ser criado, alterado ou removido.</p>
+        <p>Os demais jogos seguem abertos normalmente — cada um trava no seu próprio horário de início (horário de Brasília).</p>
+        <p>O palpite de classificação do grupo (1º e 2º lugar) trava quando o primeiro jogo daquele grupo começa.</p>
       </Section>
       <Section title="⚽ Pontuação — Jogos">
         <PointRow pts={5} label="Placar exato" desc="Acertou o resultado exato do jogo" />
