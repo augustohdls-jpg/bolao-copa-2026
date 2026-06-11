@@ -283,6 +283,20 @@ function HomeTab() {
           R$ {(scores.length * 50).toLocaleString("pt-BR")}
         </div>
         <div style={{ fontSize: 12, color: C.textSoft, marginTop: 10 }}>{scores.length} participante{scores.length === 1 ? "" : "s"} × R$ 50,00</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+          {[
+            { pos: "🥇 1º", pct: 0.7, grad: `linear-gradient(135deg, ${C.gold}, #f59e0b)` },
+            { pos: "🥈 2º", pct: 0.2, grad: "linear-gradient(135deg,#cbd5e1,#94a3b8)" },
+            { pos: "🥉 3º", pct: 0.1, grad: "linear-gradient(135deg,#d97706,#92400e)" },
+          ].map(p => (
+            <div key={p.pos} style={{ flex: "1 1 120px", maxWidth: 160, background: "rgba(0,0,0,0.25)", border: `1px solid ${C.borderSoft}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 12, color: C.textSoft, marginBottom: 6 }}>{p.pos} lugar · {p.pct * 100}%</div>
+              <div style={{ fontFamily: C.display, fontSize: 20, background: p.grad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                R$ {(scores.length * 50 * p.pct).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
         <Card title="Próximos Jogos" accent={C.neon} icon="📅">
