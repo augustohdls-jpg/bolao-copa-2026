@@ -617,10 +617,12 @@ function renderResumoImage(round, rows) {
 }
 
 function ResumoTab() {
-  const { supabase } = useApp();
+  const { supabase, matches, teams } = useApp();
   const [rounds, setRounds] = useState([]);
   const [sel, setSel] = useState(null);
   const [rows, setRows] = useState([]);
+  const [preds, setPreds] = useState([]);
+  const [openPlayer, setOpenPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
 
@@ -636,10 +638,19 @@ function ResumoTab() {
   useEffect(() => {
     if (sel == null) return;
     setLoading(true);
-    supabase.rpc("round_summary", { p_round: sel }).then(({ data }) => { setRows(data || []); setLoading(false); });
+    setOpenPlayer(null);
+    Promise.all([
+      supabase.rpc("round_summary", { p_round: sel }),
+      supabase.rpc("round_predictions", { p_round: sel }),
+    ]).then(([sumRes, predRes]) => {
+      setRows(sumRes.data || []);
+      setPreds(predRes.data || []);
+      setLoading(false);
+    });
   }, [sel]);
 
   const info = rounds.find(r => r.round === sel);
+  const matchById = {}; matches.forEach(m => { matchById[m.id] = m; });
 
   async function share() {
     setSharing(true);
@@ -684,16 +695,50 @@ function ResumoTab() {
           <Empty>Carregando...</Empty>
         ) : rows.length === 0 ? (
           <Empty>Ainda não há jogos finalizados nesta rodada.</Empty>
-        ) : rows.map((r, i) => (
-          <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < rows.length - 1 ? `1px solid ${C.borderSoft}` : "none" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.display, fontSize: 16, background: i === 0 ? `linear-gradient(135deg, ${C.gold}, #f59e0b)` : i === 1 ? "linear-gradient(135deg,#cbd5e1,#94a3b8)" : i === 2 ? "linear-gradient(135deg,#d97706,#92400e)" : "rgba(255,255,255,0.06)", color: i < 3 ? C.bgDeep : C.textSoft }}>{["🥇", "🥈", "🥉"][i] || i + 1}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: C.text }}>{r.name}</div>
-              <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>{r.jogos} jogo{r.jogos > 1 ? "s" : ""} · {r.exatos} placar{r.exatos === 1 ? "" : "es"} exato{r.exatos === 1 ? "" : "s"}</div>
+        ) : rows.map((r, i) => {
+          const isOpen = openPlayer === r.name;
+          const myPreds = preds.filter(p => p.user_name === r.name);
+          return (
+          <div key={r.name} style={{ borderBottom: i < rows.length - 1 ? `1px solid ${C.borderSoft}` : "none" }}>
+            <div onClick={() => setOpenPlayer(isOpen ? null : r.name)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", cursor: "pointer" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.display, fontSize: 16, background: i === 0 ? `linear-gradient(135deg, ${C.gold}, #f59e0b)` : i === 1 ? "linear-gradient(135deg,#cbd5e1,#94a3b8)" : i === 2 ? "linear-gradient(135deg,#d97706,#92400e)" : "rgba(255,255,255,0.06)", color: i < 3 ? C.bgDeep : C.textSoft }}>{["🥇", "🥈", "🥉"][i] || i + 1}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, color: C.text }}>{r.name}</div>
+                <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>{r.jogos} jogo{r.jogos > 1 ? "s" : ""} · {r.exatos} placar{r.exatos === 1 ? "" : "es"} exato{r.exatos === 1 ? "" : "s"}</div>
+              </div>
+              <div style={{ fontFamily: C.display, color: C.neon, fontSize: 22 }}>{r.pontos}<span style={{ fontSize: 12, color: C.textSoft, marginLeft: 4 }}>pts</span></div>
+              <span style={{ color: C.neon, fontSize: 16, transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
             </div>
-            <div style={{ fontFamily: C.display, color: C.neon, fontSize: 22 }}>{r.pontos}<span style={{ fontSize: 12, color: C.textSoft, marginLeft: 4 }}>pts</span></div>
+            {isOpen && (
+              <div style={{ padding: "4px 0 16px", display: "grid", gap: 8 }}>
+                {myPreds.length === 0 ? (
+                  <div style={{ fontSize: 12, color: C.textSoft, padding: "8px 0" }}>Sem palpites em jogos já finalizados.</div>
+                ) : myPreds.map(p => {
+                  const m = matchById[p.match_id]; if (!m) return null;
+                  const h = teams[m.home_team_id]; const a = teams[m.away_team_id];
+                  return (
+                    <div key={p.match_id} style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.borderSoft}`, borderRadius: 10, padding: "8px 12px", fontSize: 13 }}>
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5, textAlign: "right" }}>
+                        <span style={{ color: C.textSoft }}>{h?.name}</span><FlagImg id={m.home_team_id} size={16} />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontFamily: C.display, color: C.text, minWidth: 38, textAlign: "center", background: "rgba(34,197,94,0.12)", borderRadius: 6, padding: "2px 6px" }}>{p.pred_home}×{p.pred_away}</span>
+                      </div>
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 5 }}>
+                        <FlagImg id={m.away_team_id} size={16} /><span style={{ color: C.textSoft }}>{a?.name}</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 72 }}>
+                        <span style={{ fontSize: 10, color: C.textSoft }}>real {m.home_score}×{m.away_score}</span>
+                        <span style={{ fontFamily: C.display, fontSize: 13, color: p.pts >= 5 ? C.neon : p.pts > 0 ? C.gold : C.danger }}>+{p.pts} pts</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
