@@ -55,11 +55,16 @@ export default function App() {
   const [groupPredictions, setGroupPredictions] = useState({});
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [clockOffset, setClockOffset] = useState(0); // ms: horário do servidor - relógio do dispositivo
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
     loadPublicData();
+    // Sincroniza com o horário do servidor para não depender do relógio do aparelho
+    supabase.rpc("server_now").then(({ data }) => {
+      if (data) setClockOffset(new Date(data).getTime() - Date.now());
+    });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -96,13 +101,14 @@ export default function App() {
     const gpMap = {}; (gpRes.data || []).forEach(gp => gpMap[gp.group_id] = gp); setGroupPredictions(gpMap);
   }
 
-  const ctx = { user, profile, matches, teams, groups, predictions, groupPredictions, scores, supabase, loadPublicData, loadUserPredictions, setPredictions, setGroupPredictions };
+  const ctx = { user, profile, matches, teams, groups, predictions, groupPredictions, scores, supabase, clockOffset, loadPublicData, loadUserPredictions, setPredictions, setGroupPredictions };
   const isAdmin = user?.email === ADMIN_EMAIL;
   const tabs = [
     { id: "home", label: "Início", icon: "🏆" },
     { id: "groups", label: "Grupos", icon: "🌐" },
     { id: "predictions", label: "Palpites", icon: "⚡" },
     { id: "ranking", label: "Ranking", icon: "🥇" },
+    { id: "resumo", label: "Resumo", icon: "📰" },
     { id: "rules", label: "Regulamento", icon: "📋" },
     ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : []),
   ];
@@ -146,6 +152,7 @@ export default function App() {
               {tab === "groups" && <GroupsTab />}
               {tab === "predictions" && <PredictionsTab />}
               {tab === "ranking" && <RankingTab />}
+              {tab === "resumo" && <ResumoTab />}
               {tab === "rules" && <RulesTab />}
               {tab === "admin" && isAdmin && <AdminTab />}
             </>
@@ -421,7 +428,7 @@ function GroupsTab() {
 }
 
 function PredictionsTab() {
-  const { user, matches, teams, groups, predictions, groupPredictions, supabase, loadUserPredictions } = useApp();
+  const { user, matches, teams, groups, predictions, groupPredictions, supabase, clockOffset, loadUserPredictions } = useApp();
   const [activeGroup, setActiveGroup] = useState(null);
   const [saving, setSaving] = useState({});
   const [localPreds, setLocalPreds] = useState({});
@@ -429,7 +436,8 @@ function PredictionsTab() {
 
   useEffect(() => { setLocalPreds({ ...predictions }); setLocalGP({ ...groupPredictions }); }, [predictions, groupPredictions]);
 
-  const now = new Date();
+  // Usa o horário do servidor (corrigido), não o relógio do dispositivo
+  const now = new Date(Date.now() + (clockOffset || 0));
   const matchLocked = (m) => m.status !== "upcoming" || now >= new Date(m.match_date);
   const groupLocked = (groupId) => {
     const gMs = matches.filter(m => m.group_id === groupId && m.stage === "group").sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
@@ -557,6 +565,139 @@ function PredictionsTab() {
 }
 
 const scoreInputStyle = { width: 48, background: C.bgDeep, border: `1px solid ${C.border}`, color: C.text, textAlign: "center", padding: "8px", borderRadius: 8, fontSize: 18, fontFamily: C.display, outline: "none" };
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function renderResumoImage(round, rows) {
+  return new Promise((resolve) => {
+    const top = rows.slice(0, 12);
+    const W = 1080;
+    const H = 360 + top.length * 92 + 110;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const x = cv.getContext("2d");
+    const g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, "#05070f"); g.addColorStop(1, "#0c1f16");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = "#22c55e"; x.font = "bold 36px Arial"; x.textAlign = "center";
+    x.fillText("⚽ BOLÃO COPA 2026 · AGROTIS", W / 2, 95);
+    x.fillStyle = "#f5f7fb"; x.font = "bold 78px Arial";
+    x.fillText(`RESUMO · RODADA ${round}`, W / 2, 185);
+    x.fillStyle = "#9aa6bd"; x.font = "30px Arial";
+    x.fillText("Maiores pontuadores da rodada", W / 2, 240);
+    let y = 340;
+    const medals = ["🥇", "🥈", "🥉"];
+    top.forEach((r, i) => {
+      x.fillStyle = i === 0 ? "rgba(250,204,21,0.16)" : "rgba(255,255,255,0.05)";
+      roundRectPath(x, 70, y - 52, W - 140, 78, 16); x.fill();
+      x.textAlign = "left"; x.fillStyle = "#f5f7fb"; x.font = "bold 42px Arial";
+      const pos = medals[i] || `${i + 1}º`;
+      const name = r.name && r.name.length > 22 ? r.name.slice(0, 21) + "…" : (r.name || "—");
+      x.fillText(`${pos}  ${name}`, 110, y);
+      x.textAlign = "right"; x.fillStyle = "#22c55e"; x.font = "bold 46px Arial";
+      x.fillText(`${r.pontos} pts`, W - 110, y);
+      if (r.exatos > 0) {
+        x.fillStyle = "#9aa6bd"; x.font = "24px Arial";
+        x.fillText(`${r.exatos} exato${r.exatos > 1 ? "s" : ""}`, W - 110, y + 30);
+      }
+      y += 92;
+    });
+    x.textAlign = "center"; x.fillStyle = "#9aa6bd"; x.font = "26px Arial";
+    x.fillText("bolao-copa-2026-two-pink.vercel.app", W / 2, H - 45);
+    cv.toBlob((b) => resolve(b), "image/png");
+  });
+}
+
+function ResumoTab() {
+  const { supabase } = useApp();
+  const [rounds, setRounds] = useState([]);
+  const [sel, setSel] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sharing, setSharing] = useState(false);
+
+  useEffect(() => {
+    supabase.rpc("rounds_status").then(({ data }) => {
+      const rs = data || [];
+      setRounds(rs);
+      const withFin = rs.filter(r => r.finalizados > 0);
+      setSel(withFin.length ? withFin[withFin.length - 1].round : (rs[0]?.round ?? 1));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (sel == null) return;
+    setLoading(true);
+    supabase.rpc("round_summary", { p_round: sel }).then(({ data }) => { setRows(data || []); setLoading(false); });
+  }, [sel]);
+
+  const info = rounds.find(r => r.round === sel);
+
+  async function share() {
+    setSharing(true);
+    try {
+      const blob = await renderResumoImage(sel, rows);
+      const file = new File([blob], `resumo-rodada-${sel}.png`, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Resumo Rodada ${sel}`, text: `Bolão Copa 2026 — Resumo da Rodada ${sel}` });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = file.name; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) { /* cancelado pelo usuário */ }
+    setSharing(false);
+  }
+
+  return (
+    <div>
+      <SectionTitle eyebrow="Por rodada" title="Resumo" />
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        {rounds.map(r => (
+          <button key={r.round} onClick={() => setSel(r.round)} style={{ background: sel === r.round ? `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})` : "transparent", color: sel === r.round ? C.bgDeep : C.textSoft, border: `1px solid ${sel === r.round ? "transparent" : C.borderSoft}`, padding: "10px 18px", borderRadius: 10, fontSize: 12, cursor: "pointer", fontFamily: C.display, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            Rodada {r.round}
+            <span style={{ display: "block", fontSize: 10, opacity: 0.8, marginTop: 2 }}>{r.finalizados}/{r.total} jogos</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ background: `linear-gradient(180deg, ${C.surface}, ${C.surface2})`, border: `1px solid ${C.border}`, borderRadius: 18, padding: "1.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ fontFamily: C.display, fontSize: 20, color: C.text }}>Rodada {sel}</div>
+            <div style={{ fontSize: 12, color: C.textSoft, marginTop: 2 }}>{info ? `${info.finalizados} de ${info.total} jogos finalizados` : ""}</div>
+          </div>
+          <button onClick={share} disabled={sharing || rows.length === 0} style={{ background: rows.length === 0 ? "rgba(255,255,255,0.06)" : `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: rows.length === 0 ? C.textSoft : C.bgDeep, border: "none", padding: "12px 20px", borderRadius: 10, fontSize: 12, cursor: rows.length === 0 ? "default" : "pointer", fontFamily: C.display, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+            📲 {sharing ? "Gerando..." : "Compartilhar no WhatsApp"}
+          </button>
+        </div>
+
+        {loading ? (
+          <Empty>Carregando...</Empty>
+        ) : rows.length === 0 ? (
+          <Empty>Ainda não há jogos finalizados nesta rodada.</Empty>
+        ) : rows.map((r, i) => (
+          <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < rows.length - 1 ? `1px solid ${C.borderSoft}` : "none" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.display, fontSize: 16, background: i === 0 ? `linear-gradient(135deg, ${C.gold}, #f59e0b)` : i === 1 ? "linear-gradient(135deg,#cbd5e1,#94a3b8)" : i === 2 ? "linear-gradient(135deg,#d97706,#92400e)" : "rgba(255,255,255,0.06)", color: i < 3 ? C.bgDeep : C.textSoft }}>{["🥇", "🥈", "🥉"][i] || i + 1}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: C.text }}>{r.name}</div>
+              <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>{r.jogos} jogo{r.jogos > 1 ? "s" : ""} · {r.exatos} placar{r.exatos === 1 ? "" : "es"} exato{r.exatos === 1 ? "" : "s"}</div>
+            </div>
+            <div style={{ fontFamily: C.display, color: C.neon, fontSize: 22 }}>{r.pontos}<span style={{ fontSize: 12, color: C.textSoft, marginLeft: 4 }}>pts</span></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AdminTab() {
   const { matches, teams, supabase, loadPublicData } = useApp();
