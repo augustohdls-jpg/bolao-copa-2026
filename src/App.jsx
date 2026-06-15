@@ -263,8 +263,8 @@ function AuthArea() {
 const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.borderSoft}`, color: C.text, fontSize: 14, marginBottom: 12, fontFamily: C.body, boxSizing: "border-box", outline: "none" };
 
 function HomeTab() {
-  const { matches, teams, scores, groups } = useApp();
-  const upcoming = matches.filter(m => m.status === "upcoming").slice(0, 5);
+  const { matches, teams, scores, groups, user } = useApp();
+  const upcoming = matches.filter(m => m.status === "upcoming").slice(0, 8);
   const recent = matches.filter(m => m.status === "finished").slice(-3);
   const top3 = scores.slice(0, 3);
   return (
@@ -305,10 +305,11 @@ function HomeTab() {
           ))}
         </div>
       </div>
+      <Card title={user ? "Próximos Jogos · Palpite aqui" : "Próximos Jogos"} accent={C.neon} icon="📅">
+        {!user && <div style={{ fontSize: 12, color: C.gold, marginBottom: 8 }}>Entre na sua conta para palpitar direto por aqui.</div>}
+        {upcoming.length === 0 ? <Empty>Nenhum jogo agendado</Empty> : upcoming.map(m => <HomePredictRow key={m.id} match={m} />)}
+      </Card>
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
-        <Card title="Próximos Jogos" accent={C.neon} icon="📅">
-          {upcoming.length === 0 ? <Empty>Nenhum jogo agendado</Empty> : upcoming.map(m => <MatchRow key={m.id} match={m} teams={teams} />)}
-        </Card>
         <Card title="Pódio" accent={C.gold} icon="🏆">
           {top3.length === 0 ? <Empty>Sem participantes ainda</Empty> : top3.map((s, i) => (
             <div key={s.user_id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: i < top3.length - 1 ? `1px solid ${C.borderSoft}` : "none" }}>
@@ -386,6 +387,65 @@ function MatchRow({ match, teams, showScore }) {
   );
 }
 
+// Linha de jogo na Home que permite palpitar inline (estado próprio por jogo,
+// então salvar um não interfere nos outros).
+function HomePredictRow({ match }) {
+  const { user, teams, predictions, supabase, clockOffset, loadUserPredictions } = useApp();
+  const home = teams[match.home_team_id]; const away = teams[match.away_team_id];
+  const saved = predictions[match.id];
+  const [h, setH] = useState(saved?.home_score ?? "");
+  const [a, setA] = useState(saved?.away_score ?? "");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setH(saved?.home_score ?? ""); setA(saved?.away_score ?? ""); }, [saved]);
+
+  if (!home || !away) return null;
+  const now = new Date(Date.now() + (clockOffset || 0));
+  const locked = match.status !== "upcoming" || now >= new Date(match.match_date);
+  const dirty = !saved || String(h) !== String(saved.home_score ?? "") || String(a) !== String(saved.away_score ?? "");
+  const isSaved = !!saved && !dirty;
+
+  async function save() {
+    if (locked || h === "" || a === "") return;
+    setSaving(true);
+    if (saved) await supabase.from("predictions").update({ home_score: parseInt(h), away_score: parseInt(a), updated_at: new Date().toISOString() }).eq("id", saved.id);
+    else await supabase.from("predictions").insert({ user_id: user.id, match_id: match.id, home_score: parseInt(h), away_score: parseInt(a) });
+    await loadUserPredictions();
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ padding: "12px 0", borderBottom: `1px solid ${C.borderSoft}` }}>
+      <div style={{ fontSize: 11, color: locked ? C.danger : C.textSoft, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+        🗓️ {formatDate(match.match_date)} {locked && <span style={{ fontFamily: C.display, fontSize: 10, textTransform: "uppercase" }}>· Encerrado</span>}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, fontSize: 13, textAlign: "right" }}>
+          <span style={{ color: C.text }}>{home.name}</span><FlagImg id={home.id} size={20} />
+        </div>
+        {!user || locked ? (
+          <span style={{ minWidth: 64, textAlign: "center", padding: "5px 12px", background: "rgba(255,255,255,0.05)", borderRadius: 8, fontFamily: C.display, fontSize: 12, color: C.textSoft, border: `1px solid ${C.borderSoft}` }}>
+            {saved ? `${saved.home_score} × ${saved.away_score}` : (locked ? "🔒" : "—")}
+          </span>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="number" min="0" max="99" value={h} onChange={e => setH(e.target.value)} style={scoreInputStyle} />
+            <span style={{ color: C.neon, fontFamily: C.display, fontSize: 16 }}>×</span>
+            <input type="number" min="0" max="99" value={a} onChange={e => setA(e.target.value)} style={scoreInputStyle} />
+          </div>
+        )}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <FlagImg id={away.id} size={20} /><span style={{ color: C.text }}>{away.name}</span>
+        </div>
+        {user && !locked && (
+          <button onClick={save} disabled={saving || h === "" || a === "" || !dirty} style={{ background: isSaved ? "rgba(34,197,94,0.15)" : `linear-gradient(135deg, ${C.neon}, ${C.neonSoft})`, color: isSaved ? C.neon : C.bgDeep, border: isSaved ? `1px solid ${C.border}` : "none", padding: "8px 14px", borderRadius: 8, fontSize: 11, cursor: dirty ? "pointer" : "default", fontFamily: C.display, letterSpacing: "0.1em", textTransform: "uppercase", minWidth: 76, opacity: (h === "" || a === "") ? 0.5 : 1 }}>
+            {saving ? "..." : isSaved ? "✓ OK" : "Salvar"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GroupsTab() {
   const { groups, teams, matches } = useApp();
   return (
@@ -434,7 +494,9 @@ function PredictionsTab() {
   const [localPreds, setLocalPreds] = useState({});
   const [localGP, setLocalGP] = useState({});
 
-  useEffect(() => { setLocalPreds({ ...predictions }); setLocalGP({ ...groupPredictions }); }, [predictions, groupPredictions]);
+  // Mescla os palpites salvos SEM apagar o que o usuário está digitando em outros jogos.
+  // (valores locais em edição têm prioridade sobre os do servidor)
+  useEffect(() => { setLocalPreds(prev => ({ ...predictions, ...prev })); setLocalGP(prev => ({ ...groupPredictions, ...prev })); }, [predictions, groupPredictions]);
 
   // Usa o horário do servidor (corrigido), não o relógio do dispositivo
   const now = new Date(Date.now() + (clockOffset || 0));
