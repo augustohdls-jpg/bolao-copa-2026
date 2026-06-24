@@ -305,6 +305,14 @@ function HomeTab() {
           ))}
         </div>
       </div>
+      <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(120deg, rgba(34,197,94,0.12), rgba(250,204,21,0.10))`, border: `1px solid ${C.border}`, borderRadius: 20, padding: "1.75rem 2rem", textAlign: "center" }}>
+        <div style={{ fontSize: 30, marginBottom: 10 }}>🇧🇷 ✨ 🏆</div>
+        <div style={{ fontFamily: C.display, fontSize: "clamp(1.3rem, 3.5vw, 2rem)", lineHeight: 1.15, color: C.text }}>
+          “Quando <span style={{ background: `linear-gradient(135deg, ${C.neon}, ${C.gold})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>Neymar</span> toca na bola, o mundo prende a respiração.”
+        </div>
+        <div style={{ fontSize: 13, color: C.textSoft, marginTop: 12, letterSpacing: "0.05em" }}>O craque que carrega o sonho de um país inteiro. 🪄</div>
+      </div>
+
       <Card title={user ? "Próximos Jogos · Palpite aqui" : "Próximos Jogos"} accent={C.neon} icon="📅">
         {!user && <div style={{ fontSize: 12, color: C.gold, marginBottom: 8 }}>Entre na sua conta para palpitar direto por aqui.</div>}
         {upcoming.length === 0 ? <Empty>Nenhum jogo agendado</Empty> : upcoming.map(m => <HomePredictRow key={m.id} match={m} />)}
@@ -446,6 +454,24 @@ function HomePredictRow({ match }) {
   );
 }
 
+function computeStandings(teamsArr, matchesArr) {
+  const tbl = {};
+  teamsArr.forEach(t => { tbl[t.id] = { team: t, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0, pts: 0 }; });
+  matchesArr.forEach(m => {
+    if (m.status !== "finished" || m.home_score == null || m.away_score == null) return;
+    const h = tbl[m.home_team_id], a = tbl[m.away_team_id];
+    if (!h || !a) return;
+    h.j++; a.j++;
+    h.gp += m.home_score; h.gc += m.away_score;
+    a.gp += m.away_score; a.gc += m.home_score;
+    if (m.home_score > m.away_score) { h.v++; h.pts += 3; a.d++; }
+    else if (m.home_score < m.away_score) { a.v++; a.pts += 3; h.d++; }
+    else { h.e++; a.e++; h.pts++; a.pts++; }
+  });
+  return Object.values(tbl).map(r => ({ ...r, sg: r.gp - r.gc }))
+    .sort((x, y) => y.pts - x.pts || y.sg - x.sg || y.gp - x.gp || x.team.name.localeCompare(y.team.name));
+}
+
 function GroupsTab() {
   const { groups, teams, matches } = useApp();
   return (
@@ -455,18 +481,33 @@ function GroupsTab() {
         {groups.map(g => {
           const groupTeams = Object.values(teams).filter(t => t.group_id === g.id);
           const groupMatches = matches.filter(m => m.group_id === g.id);
+          const standings = computeStandings(groupTeams, groupMatches);
           return (
             <div key={g.id} style={{ background: `linear-gradient(180deg, ${C.surface}, ${C.surface2})`, border: `1px solid ${C.border}`, borderRadius: 18, padding: "1.25rem" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${C.borderSoft}` }}>
                 <span style={{ fontFamily: C.display, color: C.text, fontSize: 18, letterSpacing: "0.05em" }}>{g.name}</span>
-                <span style={{ fontSize: 10, color: C.neon, letterSpacing: "0.2em", textTransform: "uppercase" }}>{groupTeams.length} times</span>
+                <span style={{ fontSize: 10, color: C.neon, letterSpacing: "0.2em", textTransform: "uppercase" }}>Classificação</span>
               </div>
-              {groupTeams.map(t => (
-                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", fontSize: 14 }}>
-                  <FlagImg id={t.id} size={22} />
-                  <span style={{ color: C.text }}>{t.name}</span>
+              <div style={{ display: "flex", alignItems: "center", fontSize: 10, color: C.textSoft, letterSpacing: "0.05em", textTransform: "uppercase", padding: "0 0 6px", borderBottom: `1px solid ${C.borderSoft}` }}>
+                <span style={{ width: 18 }}>#</span>
+                <span style={{ flex: 1 }}>Seleção</span>
+                <span style={{ width: 24, textAlign: "center" }}>J</span>
+                <span style={{ width: 30, textAlign: "center" }}>SG</span>
+                <span style={{ width: 30, textAlign: "center", color: C.neon }}>Pts</span>
+              </div>
+              {standings.map((r, i) => (
+                <div key={r.team.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 0", fontSize: 13, borderBottom: `1px solid ${C.borderSoft}`, background: i < 2 ? "rgba(34,197,94,0.06)" : "transparent" }}>
+                  <span style={{ width: 18, fontFamily: C.display, fontSize: 12, color: i < 2 ? C.neon : C.textSoft }}>{i + 1}</span>
+                  <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                    <FlagImg id={r.team.id} size={18} />
+                    <span style={{ color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.team.name}</span>
+                  </span>
+                  <span style={{ width: 24, textAlign: "center", color: C.textSoft }}>{r.j}</span>
+                  <span style={{ width: 30, textAlign: "center", color: C.textSoft }}>{r.sg > 0 ? `+${r.sg}` : r.sg}</span>
+                  <span style={{ width: 30, textAlign: "center", fontFamily: C.display, color: C.neon }}>{r.pts}</span>
                 </div>
               ))}
+              <div style={{ fontSize: 10, color: C.textSoft, marginTop: 8 }}>🟢 Zona de classificação (1º e 2º)</div>
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.borderSoft}` }}>
                 {groupMatches.map(m => {
                   const h = teams[m.home_team_id]; const a = teams[m.away_team_id];
