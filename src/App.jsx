@@ -339,24 +339,28 @@ function HomeTab() {
 }
 
 function ParticipatingCountries({ groups, teams }) {
+  const { matches } = useApp();
   if (!groups.length || !Object.keys(teams).length) return null;
   return (
     <div style={{ background: `linear-gradient(180deg, ${C.surface}, ${C.surface2})`, border: `1px solid ${C.border}`, borderRadius: 18, padding: "1.5rem", position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.gold}, ${C.neon})` }} />
       <h3 style={{ margin: "0 0 20px", fontSize: 13, color: C.text, fontFamily: C.display, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 16 }}>🌍</span> 48 Países Participantes
+        <span style={{ fontSize: 16 }}>🌍</span> Grupos · Classificação
       </h3>
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
         {groups.map(g => {
           const gTeams = Object.values(teams).filter(t => t.group_id === g.id);
+          const gMatches = matches.filter(m => m.group_id === g.id);
+          const standings = computeStandings(gTeams, gMatches);
           return (
             <div key={g.id}>
               <div style={{ fontSize: 11, color: C.neon, fontFamily: C.display, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10, paddingBottom: 6, borderBottom: `1px solid ${C.borderSoft}` }}>{g.name}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {gTeams.map(t => (
-                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: `1px solid ${C.borderSoft}` }}>
-                    <FlagImg id={t.id} size={24} />
-                    <span style={{ fontSize: 13, color: C.textSoft }}>{t.name}</span>
+                {standings.map((r, i) => (
+                  <div key={r.team.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: i < 2 ? "rgba(34,197,94,0.08)" : "rgba(255,255,255,0.03)", borderRadius: 8, border: `1px solid ${i < 2 ? C.border : C.borderSoft}` }}>
+                    <span style={{ width: 18, fontFamily: C.display, fontSize: 12, color: i < 2 ? C.neon : C.textSoft }}>{i + 1}º</span>
+                    <FlagImg id={r.team.id} size={22} />
+                    <span style={{ flex: 1, fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.team.name}</span>
                   </div>
                 ))}
               </div>
