@@ -423,13 +423,14 @@ function BracketTeamLine({ team, score, winner }) {
 // ─── DOUBLE PICK BUTTON ───────────────────────────────────────────────────────
 
 function DoublePickBtn({ match }) {
-  const { user, doublePicks, supabase, loadUserPredictions, clockOffset } = useApp();
+  const { user, doublePicks, matches, supabase, loadUserPredictions, clockOffset } = useApp();
   const [busy, setBusy] = useState(false);
 
   if (!user) return null;
 
   const now = new Date(Date.now() + (clockOffset || 0));
-  const locked = match.status !== "upcoming" || now >= new Date(match.match_date);
+  const isLocked = (m) => !m || m.status !== "upcoming" || now >= new Date(m.match_date);
+  const locked = isLocked(match);
   const isMyDouble = !!doublePicks[match.id];
 
   if (locked) {
@@ -437,7 +438,17 @@ function DoublePickBtn({ match }) {
   }
 
   const pickDate = getPickDate(match.match_date);
-  const sameDay = Object.values(doublePicks).find(dp => dp.pick_date === pickDate && dp.match_id !== match.id);
+  // Palpite dobrado já existente neste dia (pode ser este jogo ou outro)
+  const dayPick = Object.values(doublePicks).find(dp => dp.pick_date === pickDate);
+  const dayPickMatch = dayPick ? matches.find(m => m.id === dayPick.match_id) : null;
+  // Se o dobrado do dia já está num jogo que começou, a estrela do dia está travada
+  const dayCommitted = dayPick && dayPick.match_id !== match.id && isLocked(dayPickMatch);
+  if (dayCommitted) {
+    return (
+      <span title="O palpite dobrado deste dia já foi definido e o jogo começou" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, opacity: 0.3 }}>🔒</span>
+    );
+  }
+  const sameDay = dayPick && dayPick.match_id !== match.id ? dayPick : null;
 
   async function toggle() {
     setBusy(true);
