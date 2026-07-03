@@ -1070,7 +1070,7 @@ function AdminTab() {
 
   useEffect(() => {
     const init = {};
-    matches.forEach(m => { init[m.id] = { h: m.home_score ?? "", a: m.away_score ?? "" }; });
+    matches.forEach(m => { init[m.id] = { h: m.home_score ?? "", a: m.away_score ?? "", w: m.winner_team_id ?? "" }; });
     setLocal(init);
     const initT = {};
     matches.filter(m => m.stage !== "group").forEach(m => { initT[m.id] = { home: m.home_team_id || "", away: m.away_team_id || "" }; });
@@ -1080,10 +1080,12 @@ function AdminTab() {
   async function saveResult(m) {
     const v = local[m.id];
     if (v?.h === "" || v?.a === "" || v?.h == null || v?.a == null) return;
+    const isKnockoutDraw = m.stage !== "group" && parseInt(v.h) === parseInt(v.a);
+    if (isKnockoutDraw && !v.w) { setMsg("⚠️ Empate no mata-mata: selecione quem venceu nos pênaltis."); return; }
     setSaving(s => ({ ...s, [m.id]: true })); setMsg("");
-    const { error } = await supabase.rpc("set_result", { p_match_id: m.id, p_home: parseInt(v.h), p_away: parseInt(v.a) });
+    const { error } = await supabase.rpc("set_result", { p_match_id: m.id, p_home: parseInt(v.h), p_away: parseInt(v.a), p_winner: isKnockoutDraw ? v.w : null });
     if (error) setMsg("Erro ao salvar: " + error.message);
-    else { setMsg(`✓ Resultado salvo: ${teams[m.home_team_id]?.name || "?"} ${v.h} x ${v.a} ${teams[m.away_team_id]?.name || "?"}`); await loadPublicData(); }
+    else { setMsg(`✓ Resultado salvo: ${teams[m.home_team_id]?.name || "?"} ${v.h} x ${v.a} ${teams[m.away_team_id]?.name || "?"}${isKnockoutDraw ? ` (pênaltis: ${teams[v.w]?.name})` : ""}`); await loadPublicData(); }
     setSaving(s => ({ ...s, [m.id]: false }));
   }
 
@@ -1197,6 +1199,16 @@ function AdminTab() {
                     </button>
                     {isFinished && <button onClick={() => reopen(m)} disabled={saving[m.id]} style={{ background: "transparent", color: C.danger, border: `1px solid ${C.borderSoft}`, padding: "9px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: C.display, textTransform: "uppercase" }}>Reabrir</button>}
                   </div>
+                  {v.h !== "" && v.a !== "" && parseInt(v.h) === parseInt(v.a) && (
+                    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.gold, flexWrap: "wrap" }}>
+                      <span>🥅 Empate — quem venceu nos pênaltis?</span>
+                      <select value={v.w || ""} onChange={e => setLocal(p => ({ ...p, [m.id]: { ...p[m.id], w: e.target.value } }))} style={{ ...inputStyle, marginBottom: 0, padding: "8px", width: "auto", background: C.surface2, color: C.text }}>
+                        <option value="" style={{ background: C.surface2 }}>Selecione</option>
+                        <option value={m.home_team_id} style={{ background: C.surface2 }}>{home?.name}</option>
+                        <option value={m.away_team_id} style={{ background: C.surface2 }}>{away?.name}</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               );
             })}
